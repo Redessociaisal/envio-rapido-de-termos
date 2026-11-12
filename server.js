@@ -15,6 +15,7 @@ const app = express();
 // O token não será salvo no GitHub nem exibido nos logs.
 let pendingRefreshToken = null;
 let pendingTokenExpiresAt = 0;
+let pendingTokenNonce = null;
 app.disable('x-powered-by');
 
 app.use(helmet({
@@ -137,7 +138,33 @@ app.get('/admin/autorizar', (req, res) => {
             mensagem.textContent = 'Não foi possível iniciar a autorização.';
           }
         };
-      </script>
+
+              document.getElementById('recuperar').onclick = async () => {
+          const chave = document.getElementById('chave').value;
+          const mensagem = document.getElementById('mensagem');
+
+          try {
+            const resposta = await fetch('/admin/oauth/token', {
+              headers: { 'x-admin-key': chave },
+              cache: 'no-store'
+            });
+
+            if (!resposta.ok) {
+              throw new Error('Token indisponível ou acesso recusado.');
+            }
+
+            const dados = await resposta.json();
+
+            await navigator.clipboard.writeText(dados.refresh_token);
+
+            mensagem.textContent =
+              'Token copiado! Cole-o no campo GOOGLE_REFRESH_TOKEN do Render.';
+          } catch (erro) {
+            mensagem.textContent =
+              'Não foi possível recuperar ou copiar o token.';
+          }
+        };
+        </script>
     </body>
     </html>
   `);
@@ -147,9 +174,27 @@ app.get('/admin/oauth/start', setupLimiter, (req, res) => {
   try {
     if (!authorized(req)) {
       return res.sendStatus(403);
+      if (process.env.GOOGLE_REFRESH_TOKEN) {
+  return res.status(403).json({
+    error: 'O Google Drive já está configurado.'
+  });
+}
     }
+if (pendingRefreshToken &&
+    Date.now() < pendingTokenExpiresAt) {
+  return res.status(409).json({
+    error: 'Existe uma autorização aguardando recuperação.'
+  });
+}
 
     const state = crypto.randomBytes(24).toString('hex');
+    res.cookie('oauth_setup_state', state, {
+  httpOnly: true,
+  secure: true,
+  sameSite: 'lax',
+  maxAge: 10 * 60 * 1000,
+  path: '/'
+});
     const client = oauthClient();
 
     // O estado é assinado e expira em 10 minutos.
@@ -195,6 +240,24 @@ app.get('/oauth2callback', setupLimiter, async (req, res) => {
     }
 
     const [nonce, expiry, signature] = parts;
+    const cookieState = (req.headers.cookie || '')
+  .split(';')
+  .map(item => item.trim())
+  .find(item => item.startsWith('oauth_setup_state='))
+  ?.slice('oauth_setup_state='.length);
+
+if (!cookieState ||
+    cookieState.length !== nonce.length ||
+    !crypto.timingSafeEqual(
+      Buffer.from(cookieState),
+      Buffer.from(nonce)
+    )) {
+  return res.status(403).send(
+    'Autorização não iniciada neste navegador.'
+  );
+}
+
+
     const payload = `${nonce}.${expiry}`;
 
     if (!/^[a-f0-9]{48}$/.test(nonce) ||
@@ -216,6 +279,12 @@ app.get('/oauth2callback', setupLimiter, async (req, res) => {
     }
 
     const client = oauthClient();
+    if (pendingRefreshToken &&
+    Date.now() < pendingTokenExpiresAt) {
+  return res.status(409).send(
+    'Já existe uma autorização aguardando recuperação.'
+  );
+}
     const { tokens } = await client.getToken(code);
 
     if (!tokens.refresh_token) {
@@ -228,6 +297,7 @@ app.get('/oauth2callback', setupLimiter, async (req, res) => {
     // nem os exibimos em uma página pública.
     // A configuração final requer armazenamento seguro.
     pendingRefreshToken = tokens.refresh_token;
+    pendingTokenNonce = nonce;
 pendingTokenExpiresAt = Date.now() + 5 * 60 * 1000;
     console.log('Autorização OAuth recebida.');
 
@@ -248,22 +318,51 @@ app.get('/admin/oauth/token', setupLimiter, (req, res) => {
     if (!authorized(req)) {
       return res.sendStatus(403);
     }
-
+    if (process.env.GOOGLE_REFRESH_TOKEN) {
+      return res.status(403).json({
+        error: 'A configuração do Google Drive já foi concluída.'
+      });
+    }
     if (!pendingRefreshToken ||
         Date.now() > pendingTokenExpiresAt) {
       pendingRefreshToken = null;
       pendingTokenExpiresAt = 0;
-
+pendingTokenNonce = null;
       return res.status(404).json({
         error: 'Token indisponível ou expirado.'
       });
     }
+const cookieNonce = (req.headers.cookie || '')
+  .split(';')
+  .map(item => item.trim())
+  .find(item => item.startsWith('oauth_setup_state='))
+  ?.slice('oauth_setup_state='.length);
 
+if (
+  !pendingTokenNonce ||
+  !cookieNonce ||
+  cookieNonce.length !== pendingTokenNonce.length ||
+  !crypto.timingSafeEqual(
+    Buffer.from(cookieNonce),
+    Buffer.from(pendingTokenNonce)
+  )
+) {
+  return res.status(403).json({
+    error: 'Autorização não corresponde a este navegador.'
+  });
+}
     const token = pendingRefreshToken;
 
     pendingRefreshToken = null;
     pendingTokenExpiresAt = 0;
+pendingTokenNonce = null;
 
+res.clearCookie('oauth_setup_state', {
+  path: '/',
+  secure: true,
+  sameSite: 'lax',
+  httpOnly: true
+});
     return res.json({ refresh_token: token });
   } catch (err) {
     return res.status(500).json({
