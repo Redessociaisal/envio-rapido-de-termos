@@ -11,6 +11,7 @@ const crypto = require('crypto');
 const path = require('path');
 
 const app = express();
+app.set('trust proxy', 1);
 // Armazena temporariamente o token durante a configuração.
 // O token não será salvo no GitHub nem exibido nos logs.
 let pendingRefreshToken = null;
