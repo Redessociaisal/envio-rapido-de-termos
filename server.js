@@ -108,68 +108,6 @@ const setupLimiter = rateLimit({
 // A chave deve ser enviada em um cabeçalho,
 // nunca na URL.
 
-app.get('/admin/autorizar', (req, res) => {
-  res.set('Cache-Control', 'no-store');
-  res.type('html').send(`
-    <!DOCTYPE html>
-    <html lang="pt-BR">
-    <head>
-      <meta charset="UTF-8">
-      <title>Autorizar Google Drive</title>
-    </head>
-    <body>
-      <h2>Autorizar Google Drive</h2>
-      <p>Digite sua chave administrativa:</p>
-      <input id="chave" type="password">
-      <button id="autorizar">Autorizar</button>
-      <button id="recuperar" type="button">Recuperar token</button>
-      <p id="mensagem"></p>
-      <script>
-        document.getElementById('autorizar').onclick = async () => {
-          const chave = document.getElementById('chave').value;
-          const mensagem = document.getElementById('mensagem');
-          try {
-            const resposta = await fetch('/admin/oauth/start', {
-              headers: { 'x-admin-key': chave }
-            });
-            if (!resposta.ok) throw new Error('Autorização recusada');
-            const dados = await resposta.json();
-            window.location.assign(dados.authorizationUrl);
-          } catch (erro) {
-            mensagem.textContent = 'Não foi possível iniciar a autorização.';
-          }
-        };
-
-              document.getElementById('recuperar').onclick = async () => {
-          const chave = document.getElementById('chave').value;
-          const mensagem = document.getElementById('mensagem');
-
-          try {
-            const resposta = await fetch('/admin/oauth/token', {
-              headers: { 'x-admin-key': chave },
-              cache: 'no-store'
-            });
-
-            if (!resposta.ok) {
-              throw new Error('Token indisponível ou acesso recusado.');
-            }
-
-            const dados = await resposta.json();
-
-            await navigator.clipboard.writeText(dados.refresh_token);
-
-            mensagem.textContent =
-              'Token copiado! Cole-o no campo GOOGLE_REFRESH_TOKEN do Render.';
-          } catch (erro) {
-            mensagem.textContent =
-              'Não foi possível recuperar ou copiar o token.';
-          }
-        };
-        </script>
-    </body>
-    </html>
-  `);
-});
 
 app.get('/admin/oauth/start', setupLimiter, (req, res) => {
   try {
