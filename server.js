@@ -239,7 +239,37 @@ pendingTokenExpiresAt = Date.now() + 5 * 60 * 1000;
     return res.status(500).send('Falha na autorização.');
   }
 });
+// Recupera o token somente com a chave administrativa.
+app.get('/admin/oauth/token', setupLimiter, (req, res) => {
+  res.set('Cache-Control', 'no-store');
 
+  try {
+    if (!authorized(req)) {
+      return res.sendStatus(403);
+    }
+
+    if (!pendingRefreshToken ||
+        Date.now() > pendingTokenExpiresAt) {
+      pendingRefreshToken = null;
+      pendingTokenExpiresAt = 0;
+
+      return res.status(404).json({
+        error: 'Token indisponível ou expirado.'
+      });
+    }
+
+    const token = pendingRefreshToken;
+
+    pendingRefreshToken = null;
+    pendingTokenExpiresAt = 0;
+
+    return res.json({ refresh_token: token });
+  } catch (err) {
+    return res.status(500).json({
+      error: 'Não foi possível recuperar o token.'
+    });
+  }
+});
 app.post(
   '/api/enviar',
   limiter,
