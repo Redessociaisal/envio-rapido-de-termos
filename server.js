@@ -226,6 +226,8 @@ app.get('/oauth2callback', setupLimiter, async (req, res) => {
     // Não armazenamos tokens no disco temporário
     // nem os exibimos em uma página pública.
     // A configuração final requer armazenamento seguro.
+    pendingRefreshToken = tokens.refresh_token;
+pendingTokenExpiresAt = Date.now() + 5 * 60 * 1000;
     console.log('Autorização OAuth recebida.');
 
     return res.status(200).send(
