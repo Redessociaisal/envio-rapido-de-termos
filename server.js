@@ -488,6 +488,7 @@ app.post(
 );
 
 app.use((err, req, res, next) => {
+  console.error('ERRO DETALHADO NO ENVIO:', err);
   return res.status(
     err instanceof multer.MulterError ? 400 : 500
   ).json({
