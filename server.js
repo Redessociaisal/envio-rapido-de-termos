@@ -101,6 +101,43 @@ const setupLimiter = rateLimit({
 // Gera uma URL de autorização.
 // A chave deve ser enviada em um cabeçalho,
 // nunca na URL.
+
+app.get('/admin/autorizar', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.type('html').send(`
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+      <meta charset="UTF-8">
+      <title>Autorizar Google Drive</title>
+    </head>
+    <body>
+      <h2>Autorizar Google Drive</h2>
+      <p>Digite sua chave administrativa:</p>
+      <input id="chave" type="password">
+      <button id="autorizar">Autorizar</button>
+      <p id="mensagem"></p>
+      <script>
+        document.getElementById('autorizar').onclick = async () => {
+          const chave = document.getElementById('chave').value;
+          const mensagem = document.getElementById('mensagem');
+          try {
+            const resposta = await fetch('/admin/oauth/start', {
+              headers: { 'x-admin-key': chave }
+            });
+            if (!resposta.ok) throw new Error('Autorização recusada');
+            const dados = await resposta.json();
+            window.location.assign(dados.authorizationUrl);
+          } catch (erro) {
+            mensagem.textContent = 'Não foi possível iniciar a autorização.';
+          }
+        };
+      </script>
+    </body>
+    </html>
+  `);
+});
+
 app.get('/admin/oauth/start', setupLimiter, (req, res) => {
   try {
     if (!authorized(req)) {
