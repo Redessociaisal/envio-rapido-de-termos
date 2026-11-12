@@ -120,6 +120,7 @@ app.get('/admin/autorizar', (req, res) => {
       <p>Digite sua chave administrativa:</p>
       <input id="chave" type="password">
       <button id="autorizar">Autorizar</button>
+      <button id="recuperar" type="button">Recuperar token</button>
       <p id="mensagem"></p>
       <script>
         document.getElementById('autorizar').onclick = async () => {
