@@ -11,6 +11,10 @@ const crypto = require('crypto');
 const path = require('path');
 
 const app = express();
+// Armazena temporariamente o token durante a configuração.
+// O token não será salvo no GitHub nem exibido nos logs.
+let pendingRefreshToken = null;
+let pendingTokenExpiresAt = 0;
 app.disable('x-powered-by');
 
 app.use(helmet({
